@@ -1,13 +1,11 @@
 local acidity = require("acidity")
 
-
-local map = acidity.noise_map_complex(11,50,3,2,0.5)
-
 function love.load()
     love.graphics.setLineWidth(2)
 end
 
 function love.draw()
+    local map = acidity.noise_map_complex(1000001,50,1,2,0.5)
     local w,h = love.graphics.getDimensions()
 
     local min  =  math.huge

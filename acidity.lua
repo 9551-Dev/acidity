@@ -41,20 +41,24 @@ local function createNDarray(n, tbl)
     return tbl
 end
 
-local function make_chunk_seed(map_seed,x,y)
-    local seed = x
+local function cantor_pair(a,b)
+    local hash_a = (a >= 0 and a*2 or a*-2-1)
+    local hash_b = (b >= 0 and b*2 or b*-2-1)
+    
+    local hash_c = (hash_a >= hash_b and hash_a^2 + hash_a + hash_b or hash_a + hash_b^2)/2
 
-    seed = seed + LSHIFT(y,16)
-    seed = seed + RSHIFT(y,16)
+    return (a < 0 and b < 0 or a >= 0 and b >= 0) and hash_c or -hash_c-1
+end
 
-    return seed^map_seed
+local function calculate_vector_seed(map_seed,x,y)
+    return cantor_pair(map_seed,cantor_pair(x,y))
 end
 
 local function generate_map_vector(map,x,y)
 
     local map_vectors = map.vector
 
-    local seed = make_chunk_seed(map.seed,x,y)
+    local seed = calculate_vector_seed(map.seed,x,y)
 
     RANDOMSEED(seed)
 
@@ -127,26 +131,6 @@ function raw_map_methods:get_point(x,y)
 
     return self.output_processor(bilinear_lerp(dot1,dot2,dot3,dot4,t1,t2))
 end
-
---[[
-    
-
-    local generated_vectors = {}
-
-    local vector_directions_cnt = 18
-    local n = 0
-    for dir=0,math.pi*2,(math.pi*2)/vector_directions_cnt do
-        n = n + 1
-        generated_vectors[n] = {
-            x=math.cos(dir),
-            y=math.sin(dir)
-        }
-    end
-    vector={
-        ndirections = vector_directions_cnt,
-        directions  = generated_vectors
-    },
-]]
 
 function acidity.create_map_raw(seed,chunk_size,vector_grid,edges,direction_types,fading_function,output_processor)
     return setmetatable({
@@ -233,20 +217,26 @@ setmetatable(acidity.noise_map_complex,{__call=function(methods,seed,frequency,o
     local fade_processor   = fade   or default_easing_curve
     local output_processor = output or default_output_processor
 
-    for i=1,octaves do
-        local octave_id = i-1
-        local octave_amplitude =      persistance            ^ octave_id
-        local octave_frequency = CEIL(frequency/(lacunarity  ^ octave_id))
+    local function generate_octaves()
+        for i=1,#self do self[i] = nil end
+        for i=1,octaves do
+            local octave_id = i-1
+            local octave_amplitude =      persistance            ^ octave_id
+            local octave_frequency = CEIL(frequency/(lacunarity  ^ octave_id))
 
-        self[i] = {
-            raw = acidity.create_map_raw(
-                seed,octave_frequency,createNDarray(1),edges,vector_directions,fade_processor,output_processor
-            ),
-            frequency = octave_frequency,
-            amplitude = octave_amplitude
-        }
+            self[i] = {
+                raw = acidity.create_map_raw(
+                    seed,octave_frequency,createNDarray(1),edges,vector_directions,fade_processor,output_processor
+                ),
+                frequency = octave_frequency,
+                amplitude = octave_amplitude
+            }
+        end
     end
 
+    generate_octaves()
+
+    self.generate_octaves = generate_octaves
 
     return setmetatable(self,{__index=methods,__tostring=function() return "Object-noise_map_complex" end})
 end,__tostring=function() return "CLASS-noise_map_complex" end})
