@@ -1,5 +1,4 @@
-local acidity = {}
-local raw_map_methods = {}
+local acidity,raw_map_methods = {},{}
 
 acidity.noise_map_simple   = {}
 acidity.noise_map_complex  = {}
@@ -53,7 +52,6 @@ local function calculate_vector_seed(map_seed,x,y)
 end
 
 local function generate_map_vector(map,x,y)
-
     local map_vectors = map.vector
 
     local seed = calculate_vector_seed(map.seed,x,y)
@@ -125,7 +123,6 @@ function raw_map_methods:get_point(x,y)
     local dot2 = dot(b,direction_b_x,direction_b_y)
     local dot3 = dot(c,direction_c_x,direction_c_y)
     local dot4 = dot(d,direction_d_x,direction_d_y)
-
 
     return self.output_processor(bilinear_lerp(dot1,dot2,dot3,dot4,t1,t2))
 end
