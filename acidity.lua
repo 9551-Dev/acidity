@@ -297,4 +297,6 @@ function acidity.noise_map_complex:rebuild()
     self:regenerate()
 end
 
+acidity.get_point_hash = calculate_vector_seed
+
 return acidity
