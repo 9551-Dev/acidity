@@ -297,6 +297,8 @@ function acidity.noise_map_complex:rebuild()
     self:regenerate()
 end
 
+acidity.init_map_chunk = init_map_chunk
 acidity.get_point_hash = calculate_vector_seed
+acidity.cantor_pair    = cantor_pair
 
 return acidity
