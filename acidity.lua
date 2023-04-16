@@ -1,12 +1,9 @@
-local acidity = {}
-local raw_map_methods = {}
+local acidity,raw_map_methods = {},{}
 
--- objects
-local I_map_interfacable = {}
 acidity.noise_map_simple   = {}
 acidity.noise_map_complex  = {}
 
-local RANDOM,RANDOMSEED,LSHIFT,RSHIFT,CEIL = math.random,math.randomseed,bit32 and bit32.lshift or bit.lshift,bit32 and bit32.rshift or bit.rshift,math.ceil
+local RANDOM,RANDOMSEED,CEIL = math.random,math.randomseed,math.ceil
 
 local default_edge_1 = {x=0,y=0}
 local default_edge_2 = {x=1,y=0}
@@ -44,8 +41,8 @@ end
 local function cantor_pair(a,b)
     local hash_a = (a >= 0 and a*2 or a*-2-1)
     local hash_b = (b >= 0 and b*2 or b*-2-1)
-    
-    local hash_c = (hash_a >= hash_b and hash_a^2 + hash_a + hash_b or hash_a + hash_b^2)/2
+
+    local hash_c = ((hash_a >= hash_b) and hash_a^2+hash_a+hash_b or hash_a+hash_b^2)/2
 
     return (a < 0 and b < 0 or a >= 0 and b >= 0) and hash_c or -hash_c-1
 end
@@ -55,7 +52,6 @@ local function calculate_vector_seed(map_seed,x,y)
 end
 
 local function generate_map_vector(map,x,y)
-
     local map_vectors = map.vector
 
     local seed = calculate_vector_seed(map.seed,x,y)
@@ -128,7 +124,6 @@ function raw_map_methods:get_point(x,y)
     local dot3 = dot(c,direction_c_x,direction_c_y)
     local dot4 = dot(d,direction_d_x,direction_d_y)
 
-
     return self.output_processor(bilinear_lerp(dot1,dot2,dot3,dot4,t1,t2))
 end
 
@@ -145,111 +140,145 @@ function acidity.create_map_raw(seed,chunk_size,vector_grid,edges,direction_type
     },{__index=raw_map_methods})
 end
 
--- constructors
-setmetatable(I_map_interfacable,{__call=function(methods,interface_parent)
-    setmetatable(getmetatable(interface_parent).__index,{__index=methods})
-    return interface_parent
-end,__tostring=function() return "CLASS-IMapInterfacable" end})
-
 setmetatable(acidity.noise_map_simple,{__call=function(methods,seed,frequency,generate_vector_directions,custom_edges,fade,output)
-    local generated_vectors = {}
-
     local directions = generate_vector_directions or 8
-
-    local n = 0
-    for dir=0,math.pi*2,(math.pi*2)/directions do
-        n = n + 1
-        generated_vectors[n] = {
-            x=math.cos(dir),
-            y=math.sin(dir)
+    
+    local this = {
+        raw_config={
+            edges = custom_edges or {
+                {x=default_edge_1.x,y=default_edge_1.y},
+                {x=default_edge_2.x,y=default_edge_2.y},
+                {x=default_edge_3.x,y=default_edge_3.y},
+                {x=default_edge_4.x,y=default_edge_4.y}
+            },
+            frequency        = frequency,
+            seed             = seed,
+            directions       = directions,
+            fade_processor   = fade,
+            output_processor = output
         }
+    }
+
+    local function generate_grid()
+        local generated_vectors = {}
+        local n = 0
+
+        for dir=0,math.pi*2,(math.pi*2)/directions do
+            n = n + 1
+            generated_vectors[n] = {
+                x=math.cos(dir),
+                y=math.sin(dir)
+            }
+        end
+
+        local vector_directions = {
+            ndirections = this.raw_config.directions,
+            directions  = generated_vectors
+        }
+
+        local fade_processor   = this.raw_config.fade_processor   or default_easing_curve
+        local output_processor = this.raw_config.output_processor or default_output_processor
+
+        this.raw = acidity.create_map_raw(
+            this.raw_config.seed,
+            this.raw_config.frequency,
+            createNDarray(1),
+            this.raw_config.edges,
+            vector_directions,
+            fade_processor,
+            output_processor
+        )
     end
 
-    local self = {raw=acidity.create_map_raw(
-        seed,frequency,createNDarray(1),
-        custom_edges or {
-            {x=default_edge_1.x,y=default_edge_1.y},
-            {x=default_edge_2.x,y=default_edge_2.y},
-            {x=default_edge_3.x,y=default_edge_3.y},
-            {x=default_edge_4.x,y=default_edge_4.y}
-        },
-        {
-            ndirections = directions,
-            directions  = generated_vectors
-        },fade or default_easing_curve,output or default_output_processor
-    )}
+    generate_grid()
+    this.regenerate = generate_grid
 
-    return I_map_interfacable(setmetatable(self,{__index=methods,__tostring=function() return "Object-noise_map_simple" end}))
-end,__tostring=function() return "CLASS-noise_map_simple" end})
+    return setmetatable(this,{__index=methods,__tostring=function() return "simple_noise_map" end})
+end})
 
 setmetatable(acidity.noise_map_complex,{__call=function(methods,seed,frequency,octaves,lacunarity,persistance,generate_vector_directions,custom_edges,fade,output)
-    local self = {
+    local directions = generate_vector_directions or 8
+    
+    local this = {
         octaves     = octaves,
         lacunarity  = lacunarity,
-        persistance = persistance
-    }
-
-    local generated_vectors = {}
-
-    local directions = generate_vector_directions or 8
-
-    local n = 0
-    for dir=0,math.pi*2,(math.pi*2)/directions do
-        n = n + 1
-        generated_vectors[n] = {
-            x=math.cos(dir),
-            y=math.sin(dir)
+        persistance = persistance,
+        raw_config={
+            edges = custom_edges or {
+                {x=default_edge_1.x,y=default_edge_1.y},
+                {x=default_edge_2.x,y=default_edge_2.y},
+                {x=default_edge_3.x,y=default_edge_3.y},
+                {x=default_edge_4.x,y=default_edge_4.y}
+            },
+            frequency        = frequency,
+            seed             = seed,
+            directions       = directions,
+            fade_processor   = fade,
+            output_processor = output
         }
-    end
-
-    local edges = custom_edges or {
-        {x=default_edge_1.x,y=default_edge_1.y},
-        {x=default_edge_2.x,y=default_edge_2.y},
-        {x=default_edge_3.x,y=default_edge_3.y},
-        {x=default_edge_4.x,y=default_edge_4.y}
     }
-
-    local vector_directions = {
-        ndirections = directions,
-        directions  = generated_vectors
-    }
-
-    local fade_processor   = fade   or default_easing_curve
-    local output_processor = output or default_output_processor
 
     local function generate_octaves()
-        for i=1,#self do self[i] = nil end
-        for i=1,octaves do
-            local octave_id = i-1
-            local octave_amplitude =      persistance            ^ octave_id
-            local octave_frequency = CEIL(frequency/(lacunarity  ^ octave_id))
+        local generated_vectors = {}
 
-            self[i] = {
+        local n = 0
+        for dir=0,math.pi*2,(math.pi*2)/this.raw_config.directions do
+            n = n + 1
+            generated_vectors[n] = {
+                x=math.cos(dir),
+                y=math.sin(dir)
+            }
+        end
+
+        local edges = this.raw_config.edges
+
+        local vector_directions = {
+            ndirections = this.raw_config.directions,
+            directions  = generated_vectors
+        }
+
+        local fade_processor   = this.raw_config.fade_processor   or default_easing_curve
+        local output_processor = this.raw_config.output_processor or default_output_processor
+
+        local octaves_out = {}
+
+        for i=1,this.octaves do
+            local octave_id = i-1
+            local octave_amplitude =      this.persistance                            ^ octave_id
+            local octave_frequency = CEIL(this.raw_config.frequency/(this.lacunarity  ^ octave_id))
+
+            octaves_out[i] = {
                 raw = acidity.create_map_raw(
-                    seed,octave_frequency,createNDarray(1),edges,vector_directions,fade_processor,output_processor
+                    this.raw_config.seed,octave_frequency,createNDarray(1),edges,vector_directions,fade_processor,output_processor
                 ),
                 frequency = octave_frequency,
                 amplitude = octave_amplitude
             }
         end
+        
+        this.generated_octaves = octaves_out
     end
 
     generate_octaves()
 
-    self.generate_octaves = generate_octaves
+    this.regenerate = generate_octaves
 
-    return setmetatable(self,{__index=methods,__tostring=function() return "Object-noise_map_complex" end})
-end,__tostring=function() return "CLASS-noise_map_complex" end})
+    return setmetatable(this,{__index=methods,__tostring=function() return "complex_noise_map" end})
+end})
 
+function acidity.noise_map_simple:get_point(x,y)
+    return self.raw:get_point(x,y)
+end
 function acidity.noise_map_complex:get_point(x,y)
     local total = 0
 
-    local octaves = self.octaves
+    local octaves    = self.octaves
+    local noise_maps = self.generated_octaves
 
     local total_amplitude = 0
 
     for i=1,octaves do
-        local octave = self[i]
+        local octave = noise_maps[i]
 
         local amplitude = octave.amplitude
 
@@ -261,8 +290,15 @@ function acidity.noise_map_complex:get_point(x,y)
     return total/total_amplitude
 end
 
-function acidity.noise_map_simple:get_point(x,y)
-    return self.raw:get_point(x,y)
+function acidity.noise_map_simple:rebuild()
+    self:regenerate()
 end
+function acidity.noise_map_complex:rebuild()
+    self:regenerate()
+end
+
+acidity.init_map_chunk = init_map_chunk
+acidity.get_point_hash = calculate_vector_seed
+acidity.cantor_pair    = cantor_pair
 
 return acidity
