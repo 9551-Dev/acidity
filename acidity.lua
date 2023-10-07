@@ -14,6 +14,10 @@ local function default_easing_curve(t)
     return 6*t^5-15*t^4+10*t^3
 end
 
+local function linear_curve(t)
+    return t
+end
+
 local function default_output_processor(n)
     return (n+1)/2
 end
@@ -98,7 +102,11 @@ local function bilinear_lerp(a,b,c,d,t1,t2)
     return (1-t2)*ab + t2*cd
 end
 
-function raw_map_methods:get_point(x,y)
+local function lerp(a,b,t1)
+    return (1-t1)*a + b*t1
+end
+
+local function get_point_subfunc(self,x,y)
     init_map_chunk(self,x,y)
 
     local a,b,c,d = get_chunk_vectors(self,x,y)
@@ -127,6 +135,52 @@ function raw_map_methods:get_point(x,y)
     return self.output_processor(bilinear_lerp(dot1,dot2,dot3,dot4,t1,t2))
 end
 
+function raw_map_methods:get_point(x, y)
+    local x_remainder = x % 1
+    local y_remainder = y % 1
+
+    local x_floor,x_ceil
+    local y_floor,y_ceil
+    local interpolate_x,interpolate_y
+
+    if x_remainder ~= 0 then
+        x_ceil, x_floor = x+(1-x_remainder),x-x_remainder
+        interpolate_x = true
+    end
+
+    if y_remainder ~= 0 then
+        y_ceil, y_floor = y + (1 - y_remainder), y - y_remainder
+        interpolate_y = true
+    end
+
+    if interpolate_x and interpolate_y then
+        return bilinear_lerp(
+            get_point_subfunc(self, x_floor,y_floor),
+            get_point_subfunc(self, x_ceil, y_floor),
+            get_point_subfunc(self, x_floor,y_ceil),
+            get_point_subfunc(self, x_ceil, y_ceil),
+            linear_curve(x_remainder),
+            linear_curve(y_remainder)
+        )
+    elseif interpolate_x then
+        error("x")
+        return lerp(
+            get_point_subfunc(self,x_floor,y),
+            get_point_subfunc(self,x_ceil, y),
+            linear_curve(x_remainder)
+        )
+    elseif interpolate_y then
+        return lerp(
+            get_point_subfunc(self,x,y_floor),
+            get_point_subfunc(self,x,y_ceil),
+            linear_curve(y_remainder)
+        )
+    else
+        return get_point_subfunc(self, x, y)
+    end
+end
+
+
 function acidity.create_map_raw(seed,chunk_size,vector_grid,edges,direction_types,fading_function,output_processor)
     return setmetatable({
         chunk_size       = chunk_size,
@@ -142,7 +196,7 @@ end
 
 setmetatable(acidity.noise_map_simple,{__call=function(methods,seed,frequency,generate_vector_directions,custom_edges,fade,output)
     local directions = generate_vector_directions or 8
-    
+
     local this = {
         raw_config={
             edges = custom_edges or {
@@ -198,7 +252,7 @@ end})
 
 setmetatable(acidity.noise_map_complex,{__call=function(methods,seed,frequency,octaves,lacunarity,persistance,generate_vector_directions,custom_edges,fade,output)
     local directions = generate_vector_directions or 8
-    
+
     local this = {
         octaves     = octaves,
         lacunarity  = lacunarity,
@@ -255,7 +309,7 @@ setmetatable(acidity.noise_map_complex,{__call=function(methods,seed,frequency,o
                 amplitude = octave_amplitude
             }
         end
-        
+
         this.generated_octaves = octaves_out
     end
 
