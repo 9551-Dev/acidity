@@ -163,7 +163,6 @@ function raw_map_methods:get_point(x, y)
             linear_curve(y_remainder)
         )
     elseif interpolate_x then
-        error("x")
         return lerp(
             get_point_subfunc(self,x_floor,y),
             get_point_subfunc(self,x_ceil, y),
